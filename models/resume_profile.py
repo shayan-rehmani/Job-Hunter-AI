@@ -1,13 +1,19 @@
+
 from pydantic import BaseModel, Field
 
 
 class Education(BaseModel):
+    qualification_level: str | None = None
     degree: str | None = None
     institution: str | None = None
+    board_or_university: str | None = None
+    stream: str | None = None
     specialization: str | None = None
     start_year: str | None = None
     end_year: str | None = None
+    passing_year: str | None = None
     grade: str | None = None
+    grade_type: str | None = None
 
 
 class Experience(BaseModel):
