@@ -33,6 +33,7 @@ class Certification(BaseModel):
 
 class ResumeProfile(BaseModel):
     full_name: str | None = None
+    date_of_birth: str | None = None
     email: str | None = None
     phone: str | None = None
     location: str | None = None
