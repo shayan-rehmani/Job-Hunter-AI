@@ -42,10 +42,10 @@ class ProfileResponse(BaseModel):
     experience: list[dict] = Field(default_factory=list)
     projects: list[dict] = Field(default_factory=list)
     certifications: list[dict] = Field(default_factory=list)
-    languages: list[str] = Field(default_factory=list)
+    languages: list[dict] = Field(default_factory=list)
 
 class SkillsUpdate(BaseModel):
-    skills: list[str] = Field(min_length=1, max_length=100)
+    skills: list[str] = Field(max_length=100)
 
     @field_validator("skills")
     @classmethod

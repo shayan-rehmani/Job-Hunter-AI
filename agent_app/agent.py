@@ -1,8 +1,8 @@
 
 from google.adk.agents.llm_agent import Agent
-
+from config.ai_config import PRIMARY_MODEL
 root_agent = Agent(
-    model="gemini-3.5-flash",
+    model=PRIMARY_MODEL,
     name="job_hunter",
     description="Personal AI job hunting and application assistant.",
     instruction="""

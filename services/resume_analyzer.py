@@ -7,6 +7,8 @@ from google import genai
 
 from models.resume_profile import ResumeProfile
 
+from config.ai_config import PRIMARY_MODEL
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / "agent_app" / ".env")
 
@@ -30,7 +32,7 @@ def analyze_resume_text(
     client = genai.Client(api_key=api_key)
 
     response = client.models.generate_content(
-        model="gemini-3.5-flash",
+        model=PRIMARY_MODEL,
         contents=f"""
         Extract candidate information from the resume and its links.
 
