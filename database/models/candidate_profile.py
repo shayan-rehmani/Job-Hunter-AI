@@ -1,7 +1,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.connection import Base
@@ -34,6 +34,10 @@ class CandidateProfile(Base):
 
     professional_summary: Mapped[str | None] = mapped_column(Text)
 
+    resume_filename: Mapped[str | None] = mapped_column(String(255))
+    resume_file_path: Mapped[str | None] = mapped_column(String(500))
+    resume_analysis: Mapped[dict | None] = mapped_column(JSON)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -51,6 +55,36 @@ class CandidateProfile(Base):
     user = relationship(
         "User",
         back_populates="candidate_profile"
+    )
+
+    languages = relationship(
+        "LanguageRecord",
+        back_populates="candidate_profile",
+        cascade="all, delete-orphan"
+    )
+
+    certifications = relationship(
+        "CertificationRecord",
+        back_populates="candidate_profile",
+        cascade="all, delete-orphan"
+    )
+
+    projects = relationship(
+        "ProjectRecord",
+        back_populates="candidate_profile",
+        cascade="all, delete-orphan"
+    )
+
+    experience_records = relationship(
+        "ExperienceRecord",
+        back_populates="candidate_profile",
+        cascade="all, delete-orphan"
+    )
+
+    skills = relationship(
+        "Skill",
+        back_populates="candidate_profile",
+        cascade="all, delete-orphan"
     )
 
     # One candidate profile can have multiple education records.

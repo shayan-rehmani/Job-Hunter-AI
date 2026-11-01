@@ -17,6 +17,8 @@ from services.profile_onboarding import (
 )
 from models.resume_profile import ResumeProfile
 from auth.routes import router as auth_router
+from api.profile_routes import router as profile_router
+from api.resume_routes import router as resume_router
 
 
 app = FastAPI(
@@ -24,6 +26,9 @@ app = FastAPI(
     description="Resume analysis and candidate onboarding API",
     version="0.3.0",
 )
+
+app.include_router(profile_router)
+app.include_router(resume_router)
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
