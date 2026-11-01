@@ -21,3 +21,13 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+
+# Private user uploads
+storage/
+uploads/
