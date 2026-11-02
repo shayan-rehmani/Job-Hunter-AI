@@ -6,6 +6,7 @@ import Dashboard from "./components/Dashboard";
 import Profile from "./pages/Profile";
 import Resume from "./pages/Resume";
 import Auth from "./pages/Auth";
+import FindJobs from "./pages/FindJobs";
 
 function Placeholder({ title, description }) {
   return (
@@ -69,10 +70,7 @@ function App() {
           path="/jobs"
           element={
             <ProtectedLayout>
-              <Placeholder
-                title="Find Jobs"
-                description="Discover relevant job opportunities."
-              />
+              <FindJobs />
             </ProtectedLayout>
           }
         />

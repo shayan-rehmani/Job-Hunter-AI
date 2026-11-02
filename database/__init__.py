@@ -1,4 +1,14 @@
-from database.models import User, CandidateProfile, EducationRecord, Skill, ExperienceRecord, ProjectRecord, CertificationRecord, LanguageRecord
+from database.models import (
+    User,
+    CandidateProfile,
+    EducationRecord,
+    Skill,
+    ExperienceRecord,
+    ProjectRecord,
+    CertificationRecord,
+    LanguageRecord,
+    JobSearchPreferences,
+)
 
 __all__ = [
     "User",
@@ -9,4 +19,5 @@ __all__ = [
     "ProjectRecord",
     "CertificationRecord",
     "LanguageRecord",
+    "JobSearchPreferences",
 ]

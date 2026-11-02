@@ -93,3 +93,10 @@ class CandidateProfile(Base):
         back_populates="candidate_profile",
         cascade="all, delete-orphan"
     )
+
+    job_preferences = relationship(
+        "JobSearchPreferences",
+        back_populates="candidate_profile",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
