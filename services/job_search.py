@@ -178,18 +178,16 @@ def build_preferences(
 # GEMINI MODEL FALLBACK
 # --------------------------------------------------
 
+
 def generate_job_analysis(client, prompt: str) -> dict:
-    """Generate job analysis with automatic Gemini model fallback."""
+    """Generate job analysis with automatic Gemini model and format fallback."""
 
     models_to_try = list(dict.fromkeys([PRIMARY_MODEL, BACKUP_MODEL]))
     last_error = None
 
     for model_name in models_to_try:
         try:
-            logger.info(
-                "Analyzing jobs using model: %s",
-                model_name,
-            )
+            logger.info("Analyzing jobs using model: %s", model_name)
 
             response = client.models.generate_content(
                 model=model_name,
@@ -203,16 +201,39 @@ def generate_job_analysis(client, prompt: str) -> dict:
             if not response.text:
                 raise ValueError("Gemini returned an empty response.")
 
-            analysis = json.loads(response.text)
+            raw_text = response.text.strip()
 
-            if not isinstance(analysis, dict):
+            # Remove Markdown code fences if Gemini includes them.
+            if raw_text.startswith("```"):
+                lines = raw_text.splitlines()
+
+                if lines and lines[0].startswith("```"):
+                    lines = lines[1:]
+
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+
+                raw_text = "\n".join(lines).strip()
+
+            analysis = json.loads(raw_text)
+
+            # Accept a direct JSON array and normalize it.
+            if isinstance(analysis, list):
+                analysis = {"jobs": analysis}
+
+            # Validate the expected response structure.
+            if (
+                not isinstance(analysis, dict)
+                or not isinstance(analysis.get("jobs"), list)
+            ):
                 raise ValueError(
                     "Gemini returned an unexpected job format."
                 )
 
             logger.info(
-                "Job analysis successful using %s",
+                "Job analysis successful using %s. Jobs returned: %s",
                 model_name,
+                len(analysis["jobs"]),
             )
 
             return analysis
@@ -225,10 +246,19 @@ def generate_job_analysis(client, prompt: str) -> dict:
                 raise
 
             logger.warning(
-                "Gemini model %s returned HTTP %s. "
-                "Trying next model.",
+                "Gemini model %s returned HTTP %s. Trying next model.",
                 model_name,
                 error_code,
+            )
+
+        except (json.JSONDecodeError, ValueError) as error:
+            last_error = error
+
+            logger.warning(
+                "Gemini model %s returned invalid job analysis: %s. "
+                "Trying next model.",
+                model_name,
+                error,
             )
 
     logger.error("All configured Gemini models failed.")
@@ -248,11 +278,16 @@ def search_jobs_from_resume(
     location: str | None = None,
     selected_sources: list[str] | None = None,
     job_preferences: dict | None = None,
+    posting_date_range: str = "24h",
 ):
     """
     Discover public job listings using Tavily
     and rank them against the candidate's resume using Gemini.
     """
+
+    # --------------------------------------------------
+    # VALIDATE CONFIGURATION AND INPUT
+    # --------------------------------------------------
 
     tavily_key = os.getenv("TAVILY_API_KEY")
     google_key = os.getenv("GOOGLE_API_KEY")
@@ -265,6 +300,13 @@ def search_jobs_from_resume(
 
     if not isinstance(resume_analysis, dict) or not resume_analysis:
         raise ValueError("No analyzed resume was found.")
+
+    allowed_date_ranges = {"24h", "7d", "30d", "90d", "any"}
+
+    if posting_date_range not in allowed_date_ranges:
+        raise ValueError(
+            "Invalid posting date range. Use 24h, 7d, 30d, 90d, or any."
+        )
 
     preferences, job_titles, locations, skills = build_preferences(
         resume_analysis,
@@ -318,6 +360,22 @@ def search_jobs_from_resume(
 
     all_results = {}
 
+    # Tavily supports day, week and month.
+    # Exact date filtering is handled by the backend route.
+
+    date_search_options = {
+        "24h": "day",
+        "7d": "week",
+        "30d": "month",
+    }
+
+    tavily_date_options = {}
+
+    if posting_date_range in date_search_options:
+        tavily_date_options["time_range"] = (
+            date_search_options[posting_date_range]
+        )
+
     for query in queries:
         try:
             response = tavily.search(
@@ -327,6 +385,7 @@ def search_jobs_from_resume(
                 max_results=8,
                 include_answer=False,
                 include_raw_content=False,
+                **tavily_date_options,
             )
 
             for item in response.get("results", []):
@@ -535,9 +594,6 @@ Return valid JSON only:
 
         verified_timestamp = datetime.now(timezone.utc).isoformat()
 
-        # These keys are intentionally provided in both formats
-        # to support the database service and frontend.
-
         accepted_jobs.append({
             "title": title.strip(),
             "company": company.strip(),
@@ -563,10 +619,8 @@ Return valid JSON only:
             # Original application URL
             "application_url": url,
 
-            # Database-compatible employer URL
+            # Employer URL
             "employer_url": employer_url,
-
-            # Frontend-compatible employer URL
             "employer_application_url": employer_url,
 
             # Third-party application URL
@@ -595,6 +649,7 @@ Return valid JSON only:
 
     return {
         "jobs": accepted_jobs,
+
         "search_queries": queries,
 
         "grounded_sources": [
@@ -605,6 +660,8 @@ Return valid JSON only:
         "total_results": len(accepted_jobs),
 
         "location": locations[0] if locations else None,
+
+        "posting_date_range": posting_date_range,
 
         "search_message": (
             "Job discovery completed."
