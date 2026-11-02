@@ -1,15 +1,45 @@
-# Features and user workflows
+# Features and User Workflows
 
 ## Authentication
 
-- Register with an email address and password.
-- Log in with email and password.
-- Authenticated API calls use a Bearer JWT.
+Job Hunter AI supports email-verified registration, password login, and OTP-based password recovery.
+
+### Registration
+
+1. Enter an email address.
+2. Request a six-digit registration OTP.
+3. Enter the received OTP.
+4. Set and confirm a password.
+5. The backend verifies the OTP and creates the account and candidate profile.
+
+### Login
+
+- Log in using email and password.
+- Passwords are hashed with Argon2.
+- Successful login returns a signed JWT access token.
+- Protected API requests include the token as a Bearer token.
 - Current access-token lifetime: 30 minutes.
 
-Email verification by OTP and forgot-password OTP are planned improvements and are not part of the current implementation.
+### Forgot Password
 
-## Candidate profile
+1. Enter the account email address.
+2. Request a password-reset OTP.
+3. Enter the received OTP.
+4. Set and confirm a new password.
+5. The backend verifies the OTP and updates the password hash.
+
+### OTP Controls
+
+- Six-digit OTPs.
+- Five-minute default expiry.
+- Sixty-second default resend cooldown.
+- Maximum of five verification attempts.
+- HMAC-SHA256 hash storage using a separate environment secret.
+- Successful verification consumes the OTP.
+- Registration and password reset have separate OTP purposes.
+- Email delivery uses Gmail SMTP.
+
+## Candidate Profile
 
 The profile workspace supports personal information and structured career information, including:
 
@@ -30,11 +60,11 @@ The profile completion endpoint reports a percentage and missing required fields
 - Extracts text and links from the resume.
 - Uses Gemini to analyze resume information.
 - Synchronizes parsed fields into the candidate profile.
-- Stores the uploaded file under `storage/resumes/<user_id>/`.
+- Stores the uploaded file under storage/resumes/<user_id>/.
 
 Resume content is sensitive personal information. Do not commit uploaded files to source control.
 
-## Job preferences
+## Job Preferences
 
 Users can configure:
 
@@ -54,7 +84,7 @@ The API validates that the minimum salary does not exceed the maximum salary.
 
 - Search is manual; opening the page does not automatically start a new search.
 - Search uses the user's resume analysis, location and saved preferences.
-- Supported source filters include Company Career Pages, LinkedIn, Naukri, Indeed, Foundit, Internshala and other job platforms.
+- Source filters include company career pages and supported public job platforms.
 - Posting-date options: 24 hours (default), 7 days, 30 days, 90 days, and any time.
 - Results are persisted so they remain available after refreshing the page.
 - Finite date ranges exclude results without a parseable posting date.
@@ -71,7 +101,7 @@ The Applications page loads saved jobs and supports:
 - Open the job listing
 - Remove a saved job
 
-Supported status values are: `Discovered`, `Saved`, `Interested`, `Applied`, `Interview`, `Rejected`, and `Offer`.
+Supported status values are: Discovered, Saved, Interested, Applied, Interview, Rejected, and Offer.
 
 The current data model tracks discovery and update timestamps. It does not have a dedicated application-submission date field.
 
@@ -79,6 +109,6 @@ The current data model tracks discovery and update timestamps. It does not have 
 
 The dashboard loads saved-job counts and profile completion from the backend. It displays discovered jobs, application-stage counts, profile strength, recent jobs, and saved career preferences.
 
-## AI and automation boundaries
+## AI and Automation Boundaries
 
-Gemini is used for resume analysis and structuring/filtering discovered job results. Tavily is used to find public indexed pages. The app does not currently automate account creation, OTP handling, CAPTCHA solving, or final job application submission. Users remain responsible for reviewing listings and submitting applications.
+Gemini is used for resume analysis and structuring/filtering discovered job results. Tavily is used to find public indexed pages. The app does not currently automate third-party account creation, bypass OTP or CAPTCHA protections, or submit final job applications. Users remain responsible for reviewing listings and submitting applications.
