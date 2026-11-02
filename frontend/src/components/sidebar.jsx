@@ -17,7 +17,6 @@ const navigation = [
   { label: "My Profile", icon: UserRound, path: "/profile" },
   { label: "Resume Manager", icon: FileText, path: "/resume" },
   { label: "Find Jobs", icon: Search, path: "/jobs" },
-  { label: "AI Job Matches", icon: Sparkles, path: "/matches" },
   { label: "Applications", icon: BriefcaseBusiness, path: "/applications" },
 ];
 

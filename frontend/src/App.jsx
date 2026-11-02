@@ -8,7 +8,6 @@ import Profile from "./pages/Profile";
 import Resume from "./pages/Resume";
 import Auth from "./pages/Auth";
 import FindJobs from "./pages/FindJobs";
-import JobMatches from "./pages/JobMatches";
 
 function Placeholder({ title, description }) {
   return (
@@ -73,15 +72,6 @@ function App() {
           element={
             <ProtectedLayout>
               <FindJobs />
-            </ProtectedLayout>
-          }
-        />
-
-        <Route
-          path="/matches"
-          element={
-            <ProtectedLayout>
-              <JobMatches />
             </ProtectedLayout>
           }
         />
