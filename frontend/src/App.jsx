@@ -8,16 +8,7 @@ import Profile from "./pages/Profile";
 import Resume from "./pages/Resume";
 import Auth from "./pages/Auth";
 import FindJobs from "./pages/FindJobs";
-
-function Placeholder({ title, description }) {
-  return (
-    <main className="ml-64 min-h-screen bg-[#0B0B12] p-8 text-white">
-      <p className="mb-3 text-sm text-gray-500">Workspace</p>
-      <h1 className="text-3xl font-bold">{title}</h1>
-      <p className="mt-3 text-gray-400">{description}</p>
-    </main>
-  );
-}
+import Applications from "./pages/Applications";
 
 function ProtectedLayout({ children }) {
   const token = localStorage.getItem("access_token");
@@ -80,10 +71,7 @@ function App() {
           path="/applications"
           element={
             <ProtectedLayout>
-              <Placeholder
-                title="Applications"
-                description="Track your job applications."
-              />
+              <Applications />
             </ProtectedLayout>
           }
         />
