@@ -1,3 +1,4 @@
+import logging
 
 from pathlib import Path
 from uuid import uuid4
@@ -19,6 +20,8 @@ from database.models import (
 )
 from services.resume_parser import extract_resume_text, extract_resume_links
 from services.resume_analyzer import analyze_resume_text
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/resume", tags=["Resume Management"])
 
@@ -206,13 +209,19 @@ async def upload_my_resume(
         raise HTTPException(status_code=422, detail=str(error))
 
     except Exception:
+        logger.exception("Unexpected error while processing resume upload")
         db.rollback()
-        stored_path.unlink(missing_ok=True)
+
+        try:
+            stored_path.unlink(missing_ok=True)
+        except OSError:
+            logger.exception("Failed to remove temporary resume file")
+
         raise HTTPException(
             status_code=500,
-            detail="Resume processing failed. Please try again."
+            detail="Resume processing failed. Please check backend logs."
         )
-
+  
 
 @router.get("/me")
 def get_my_resume(

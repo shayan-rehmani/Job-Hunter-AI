@@ -3,10 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Sidebar from "./components/sidebar";
 import Dashboard from "./components/Dashboard";
+
 import Profile from "./pages/Profile";
 import Resume from "./pages/Resume";
 import Auth from "./pages/Auth";
 import FindJobs from "./pages/FindJobs";
+import JobMatches from "./pages/JobMatches";
 
 function Placeholder({ title, description }) {
   return (
@@ -79,10 +81,7 @@ function App() {
           path="/matches"
           element={
             <ProtectedLayout>
-              <Placeholder
-                title="AI Job Matches"
-                description="Explore jobs ranked by resume compatibility."
-              />
+              <JobMatches />
             </ProtectedLayout>
           }
         />

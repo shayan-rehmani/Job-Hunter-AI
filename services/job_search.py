@@ -9,9 +9,9 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 from tavily import TavilyClient
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 
-from config.ai_config import PRIMARY_MODEL
+from config.ai_config import PRIMARY_MODEL, BACKUP_MODEL
 
 
 logger = logging.getLogger(__name__)
@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / "agent_app" / ".env")
 
+
+# --------------------------------------------------
+# JOB SOURCES
+# --------------------------------------------------
 
 SOURCE_DOMAINS = {
     "LinkedIn": ["linkedin.com"],
@@ -171,6 +175,71 @@ def build_preferences(
 
 
 # --------------------------------------------------
+# GEMINI MODEL FALLBACK
+# --------------------------------------------------
+
+def generate_job_analysis(client, prompt: str) -> dict:
+    """Generate job analysis with automatic Gemini model fallback."""
+
+    models_to_try = list(dict.fromkeys([PRIMARY_MODEL, BACKUP_MODEL]))
+    last_error = None
+
+    for model_name in models_to_try:
+        try:
+            logger.info(
+                "Analyzing jobs using model: %s",
+                model_name,
+            )
+
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                ),
+            )
+
+            if not response.text:
+                raise ValueError("Gemini returned an empty response.")
+
+            analysis = json.loads(response.text)
+
+            if not isinstance(analysis, dict):
+                raise ValueError(
+                    "Gemini returned an unexpected job format."
+                )
+
+            logger.info(
+                "Job analysis successful using %s",
+                model_name,
+            )
+
+            return analysis
+
+        except errors.APIError as error:
+            error_code = getattr(error, "code", None)
+            last_error = error
+
+            if error_code not in (429, 500, 502, 503, 504):
+                raise
+
+            logger.warning(
+                "Gemini model %s returned HTTP %s. "
+                "Trying next model.",
+                model_name,
+                error_code,
+            )
+
+    logger.error("All configured Gemini models failed.")
+
+    raise RuntimeError(
+        "Gemini job analysis failed for all configured models. "
+        "Please try again later."
+    ) from last_error
+
+
+# --------------------------------------------------
 # JOB SEARCH
 # --------------------------------------------------
 
@@ -220,7 +289,10 @@ def search_jobs_from_resume(
     if not sources:
         sources = DEFAULT_SOURCES
 
-    # Initialize Tavily.
+    # --------------------------------------------------
+    # INITIALIZE TAVILY
+    # --------------------------------------------------
+
     try:
         tavily = TavilyClient(api_key=tavily_key)
     except Exception as error:
@@ -241,6 +313,7 @@ def search_jobs_from_resume(
                 f'{job_location} '
                 "fresher OR entry level OR internship"
             )
+
             queries.append(query)
 
     all_results = {}
@@ -292,10 +365,8 @@ def search_jobs_from_resume(
             "search_queries": queries,
             "grounded_sources": [],
             "total_results": 0,
-            "location": locations[0],
-            "search_message": (
-                "No suitable job listing pages were found."
-            ),
+            "location": locations[0] if locations else None,
+            "search_message": "No suitable job listing pages were found.",
         }
 
     # --------------------------------------------------
@@ -347,8 +418,20 @@ STRICT RULES:
     as individual job listings.
 14. Preserve the source_name associated with each result.
 15. Return an empty list if the evidence is insufficient.
-16. Do not invent required skills.
-17. Keep descriptions concise and factual.
+16. Keep descriptions concise and factual.
+
+17. SKILL EXTRACTION RULES:
+    - Extract technical and professional skills explicitly
+      mentioned in the supplied job title or page content.
+    - Include both required and preferred skills.
+    - Do not invent or assume skills based on the job title.
+    - Do not use candidate resume skills as job requirements.
+    - Use concise, recognizable skill names.
+    - Remove duplicate skills.
+    - If no skills are explicitly mentioned, return [].
+    - Do not infer skills from company name or industry.
+
+18. Match explanations must be grounded in supplied evidence.
 
 Return valid JSON only:
 
@@ -372,38 +455,20 @@ Return valid JSON only:
 
     try:
         client = genai.Client(api_key=google_key)
-
-        response = client.models.generate_content(
-            model=PRIMARY_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                response_mime_type="application/json",
-            ),
-        )
-
-        if not response.text:
-            raise ValueError(
-                "Gemini returned an empty response."
-            )
-
-        analysis = json.loads(response.text)
+        analysis = generate_job_analysis(client, prompt)
 
     except Exception as error:
         logger.exception("Gemini job analysis failed")
 
         raise RuntimeError(
-            "Gemini job analysis failed. "
-            "Check model availability and API quota."
+            f"Gemini job analysis failed: {error}"
         ) from error
 
     if (
         not isinstance(analysis, dict)
         or not isinstance(analysis.get("jobs"), list)
     ):
-        raise ValueError(
-            "Gemini returned an unexpected job format."
-        )
+        raise ValueError("Gemini returned an unexpected job format.")
 
     # --------------------------------------------------
     # STEP 3: VALIDATE AND FORMAT RESULTS
@@ -413,7 +478,6 @@ Return valid JSON only:
     seen_urls = set()
 
     for job in analysis["jobs"]:
-
         if not isinstance(job, dict):
             continue
 
@@ -435,67 +499,94 @@ Return valid JSON only:
         company = job.get("company")
 
         if not isinstance(title, str) or not title.strip():
+            logger.warning("Skipping result without a valid job title.")
             continue
 
         if not isinstance(company, str) or not company.strip():
+            logger.warning(
+                "Skipping result without an identifiable company: %s",
+                url,
+            )
             continue
 
         seen_urls.add(url)
 
         source_name = candidate["source_name"]
+        is_employer_direct = source_name == "Company Career Pages"
 
-        is_employer_direct = (
-            source_name == "Company Career Pages"
-        )
-
-        # The URL is classified by its source.
-        # We never manufacture an employer application link.
         employer_url = url if is_employer_direct else None
         third_party_url = None if is_employer_direct else url
+
+        required_skills = job.get("required_skills") or []
+
+        if not isinstance(required_skills, list):
+            required_skills = []
+
+        required_skills = list(dict.fromkeys(
+            str(skill).strip()
+            for skill in required_skills
+            if isinstance(skill, str) and skill.strip()
+        ))
+
+        match_reasons = job.get("match_reasons") or []
+
+        if not isinstance(match_reasons, list):
+            match_reasons = []
+
+        verified_timestamp = datetime.now(timezone.utc).isoformat()
+
+        # These keys are intentionally provided in both formats
+        # to support the database service and frontend.
 
         accepted_jobs.append({
             "title": title.strip(),
             "company": company.strip(),
+
             "location": job.get("location"),
             "work_mode": job.get("work_mode"),
             "experience_level": job.get("experience_level"),
+
             "description": (
                 job.get("description")
                 or candidate["content"][:500]
             ),
-            "required_skills": (
-                job.get("required_skills") or []
-            ),
+
+            "required_skills": required_skills,
+
             "posted_date": (
                 job.get("posted_date")
                 or candidate.get("published_date")
             ),
-            "match_reasons": (
-                job.get("match_reasons") or []
-            ),
 
-            # Original application URL.
+            "match_reasons": match_reasons,
+
+            # Original application URL
             "application_url": url,
 
-            # Separate application links.
+            # Database-compatible employer URL
+            "employer_url": employer_url,
+
+            # Frontend-compatible employer URL
             "employer_application_url": employer_url,
+
+            # Third-party application URL
             "third_party_application_url": third_party_url,
 
-            # Source classification.
+            # Source information
             "source_name": source_name,
+
             "source_type": (
                 "Employer Direct"
                 if is_employer_direct
                 else "Third-party"
             ),
 
-            # Transparent application status.
+            # Application status
             "application_status": "Needs verification",
 
-            # Retrieval timestamp, not proof of an active vacancy.
-            "last_checked_at": datetime.now(
-                timezone.utc
-            ).isoformat(),
+            # Verification timestamps
+            "last_checked_at": verified_timestamp,
+            "last_verified_at": verified_timestamp,
         })
 
     # --------------------------------------------------
@@ -505,12 +596,16 @@ Return valid JSON only:
     return {
         "jobs": accepted_jobs,
         "search_queries": queries,
+
         "grounded_sources": [
             job["application_url"]
             for job in accepted_jobs
         ],
+
         "total_results": len(accepted_jobs),
-        "location": locations[0],
+
+        "location": locations[0] if locations else None,
+
         "search_message": (
             "Job discovery completed."
             if accepted_jobs

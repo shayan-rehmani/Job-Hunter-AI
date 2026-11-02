@@ -7,6 +7,7 @@ from database.models.project import ProjectRecord
 from database.models.certification import CertificationRecord
 from database.models.language import LanguageRecord
 from database.models.job_preferences import JobSearchPreferences
+from database.models.job import Job
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "CertificationRecord",
     "LanguageRecord",
     "JobSearchPreferences",
+    "Job",
 ]

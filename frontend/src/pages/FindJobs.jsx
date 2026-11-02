@@ -402,6 +402,7 @@ function JobCard({ job }) {
 // --------------------------------------------------
 
 export default function FindJobs() {
+  const [loadingSavedJobs, setLoadingSavedJobs] = useState(false);
   const [preferences, setPreferences] = useState(
     EMPTY_PREFERENCES
   );
@@ -415,6 +416,8 @@ export default function FindJobs() {
   const [error, setError] = useState("");
 
   const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(false);
+  
   const [searchInfo, setSearchInfo] = useState(null);
   const [selectedSources, setSelectedSources] = useState([
     "All Sources",
@@ -425,6 +428,44 @@ export default function FindJobs() {
     () => ["All Sources", ...SOURCES],
     []
   );
+
+  // --------------------------------------------------
+// LOAD SAVED JOBS
+// --------------------------------------------------
+
+  async function fetchSavedJobs() {
+    setLoadingSavedJobs(true);
+
+    try {
+      const response = await api.get("/jobs/saved");
+
+      const savedJobs = (response.data || []).map((job) => ({
+        ...job,
+
+        // Match backend field names with the existing JobCard.
+        employer_application_url: job.employer_url || null,
+  
+        third_party_application_url: job.employer_url
+          ? job.application_url
+          : null,
+
+        source_type: job.employer_url
+          ? "Employer Direct"
+          : "Third-party",
+
+        last_checked_at: job.last_verified_at,
+      }));
+
+      setJobs(savedJobs);
+    } catch (err) {
+      setError(
+        err.response?.data?.detail ||
+          "Unable to load your saved jobs."
+      );
+    } finally {
+      setLoadingSavedJobs(false);
+    }
+  }
 
   // --------------------------------------------------
   // LOAD PREFERENCES
@@ -463,6 +504,7 @@ export default function FindJobs() {
 
   useEffect(() => {
     fetchPreferences();
+    fetchSavedJobs();
   }, []);
 
   function updatePreference(field, value) {
@@ -594,7 +636,7 @@ export default function FindJobs() {
 
       const response = await api.post("/jobs/search", sources);
 
-      setJobs(response.data.jobs || []);
+      await fetchSavedJobs();
 
       setSearchInfo({
         total: response.data.total_results ?? 0,
@@ -977,6 +1019,18 @@ export default function FindJobs() {
             </div>
           )}
 
+          {loadingSavedJobs && !searching && (
+            <div className="rounded-2xl border border-[#292938] bg-[#151520] p-8 text-center">
+              <RefreshCw
+                size={25}
+                className="mx-auto animate-spin text-[#A78BFA]"
+              />
+              <p className="mt-3 text-sm text-gray-400">
+                Loading your saved jobs...
+              </p>
+            </div>
+          )}
+
           {!searching && searchPerformed && jobs.length === 0 && !error && (
             <div className="rounded-2xl border border-[#292938] bg-[#151520] p-10 text-center">
               <Search size={30} className="mx-auto text-gray-500" />
@@ -1003,7 +1057,7 @@ export default function FindJobs() {
             </div>
           )}
 
-          {!searchPerformed && (
+          {!searchPerformed && jobs.length === 0 && !loadingSavedJobs && (
             <div className="rounded-2xl border border-dashed border-[#393047] bg-[#151520]/60 p-10 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#29243B] text-[#B9A7FF]">
                 <BriefcaseBusiness size={25} />
