@@ -8,6 +8,7 @@ from database.models.certification import CertificationRecord
 from database.models.language import LanguageRecord
 from database.models.job_preferences import JobSearchPreferences
 from database.models.job import Job
+from database.models.email_otp import EmailOTP
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "LanguageRecord",
     "JobSearchPreferences",
     "Job",
+    "EmailOTP",
 ]
