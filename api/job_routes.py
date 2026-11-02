@@ -49,7 +49,7 @@ def discover_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Discover jobs using the authenticated user's saved resume."""
+    """Discover jobs using the authenticated user's saved resume and preferences."""
 
     profile = get_user_profile(db, current_user.id)
 
@@ -60,10 +60,36 @@ def discover_jobs(
         )
 
     try:
+        preferences = (
+            db.query(JobSearchPreferences)
+            .filter(
+                JobSearchPreferences.candidate_profile_id == profile.id
+            )
+            .first()
+        )
+
+        preferences_data = (
+            {
+                "preferred_job_titles": preferences.preferred_job_titles,
+                "preferred_locations": preferences.preferred_locations,
+                "experience_level": preferences.experience_level,
+                "preferred_job_types": preferences.preferred_job_types,
+                "preferred_sources": preferences.preferred_sources,
+                "minimum_salary": preferences.minimum_salary,
+                "maximum_salary": preferences.maximum_salary,
+                "currency": preferences.currency,
+                "willing_to_relocate": preferences.willing_to_relocate,
+                "availability": preferences.availability,
+            }
+            if preferences
+            else {}
+        )
+
         result = search_jobs_from_resume(
             resume_analysis=profile.resume_analysis,
             location=profile.location,
             selected_sources=selected_sources,
+            job_preferences=preferences_data,
         )
 
         return {

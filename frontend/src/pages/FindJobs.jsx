@@ -13,9 +13,11 @@ import {
   Trash2,
   RefreshCw,
   Sparkles,
-  Clock,
   SlidersHorizontal,
   AlertCircle,
+  CheckCircle2,
+  Clock,
+  Globe,
 } from "lucide-react";
 import api from "../api/axios";
 
@@ -61,6 +63,30 @@ const EMPTY_PREFERENCES = {
   availability: "Immediately",
 };
 
+function safeHttpsUrl(url) {
+  if (typeof url !== "string") return null;
+
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatTimestamp(value) {
+  if (!value) return "Not available";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "Not available";
+
+  return date.toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 function SectionTitle({ children }) {
   return (
     <h3 className="mb-3 text-sm font-semibold text-white">
@@ -95,7 +121,7 @@ function SelectField({ label, options, ...props }) {
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {option || "Select"}
           </option>
         ))}
       </select>
@@ -103,7 +129,7 @@ function SelectField({ label, options, ...props }) {
   );
 }
 
-function TagInput({ label, values, onChange, placeholder }) {
+function TagInput({ label, values = [], onChange, placeholder }) {
   const [input, setInput] = useState("");
 
   function addItem(event) {
@@ -130,7 +156,9 @@ function TagInput({ label, values, onChange, placeholder }) {
             {value}
             <button
               type="button"
-              onClick={() => onChange(values.filter((item) => item !== value))}
+              onClick={() =>
+                onChange(values.filter((item) => item !== value))
+              }
               className="text-gray-400 hover:text-white"
               aria-label={`Remove ${value}`}
             >
@@ -159,14 +187,35 @@ function TagInput({ label, values, onChange, placeholder }) {
   );
 }
 
+// --------------------------------------------------
+// JOB CARD
+// --------------------------------------------------
+
 function JobCard({ job }) {
   const [expanded, setExpanded] = useState(false);
 
-  const applicationUrl =
-    typeof job.application_url === "string" &&
-    /^https:\/\//i.test(job.application_url)
-      ? job.application_url
-      : null;
+  const employerUrl = safeHttpsUrl(
+    job.employer_application_url
+  );
+
+  const thirdPartyUrl = safeHttpsUrl(
+    job.third_party_application_url
+  );
+
+  const originalUrl = safeHttpsUrl(job.application_url);
+
+  const lastChecked = formatTimestamp(
+    job.last_checked_at || job.last_verified_at
+  );
+
+  const sourceType =
+    job.source_type ||
+    (job.source_name === "Company Career Pages"
+      ? "Employer Direct"
+      : "Third-party");
+
+  const description =
+    job.description || "No description provided.";
 
   return (
     <article className="rounded-2xl border border-[#292938] bg-[#151520] p-5 transition hover:border-[#514475]">
@@ -178,7 +227,11 @@ function JobCard({ job }) {
             </span>
 
             <span className="rounded-md border border-[#514475] px-2.5 py-1 text-[11px] text-gray-300">
-              {job.application_status || "Status unavailable"}
+              {sourceType}
+            </span>
+
+            <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-300">
+              {job.application_status || "Needs verification"}
             </span>
           </div>
 
@@ -214,21 +267,26 @@ function JobCard({ job }) {
 
       <p className="mt-4 text-sm leading-6 text-gray-400">
         {expanded
-          ? job.description || "No description provided."
-          : `${(job.description || "No description provided.").slice(0, 190)}${(job.description || "").length > 190 ? "..." : ""}`}
+          ? description
+          : `${description.slice(0, 190)}${description.length > 190 ? "..." : ""}`}
       </p>
 
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="mt-2 text-xs text-[#B9A7FF] hover:text-white"
-      >
-        {expanded ? "Show less" : "Read more"}
-      </button>
+      {description.length > 190 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="mt-2 text-xs text-[#B9A7FF] hover:text-white"
+        >
+          {expanded ? "Show less" : "Read more"}
+        </button>
+      )}
 
       {!!job.required_skills?.length && (
         <div className="mt-4">
-          <p className="mb-2 text-xs text-gray-500">Required skills</p>
+          <p className="mb-2 text-xs text-gray-500">
+            Required skills
+          </p>
+
           <div className="flex flex-wrap gap-2">
             {job.required_skills.map((skill, index) => (
               <span
@@ -257,36 +315,97 @@ function JobCard({ job }) {
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#292938] pt-4">
+      {/* APPLICATION LINKS */}
+
+      <div className="mt-5 border-t border-[#292938] pt-4">
+        <p className="mb-3 flex items-center gap-2 text-xs font-semibold text-gray-300">
+          <Globe size={14} />
+          Application links
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          {employerUrl && (
+            <a
+              href={employerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl bg-[#6C63FF] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#8179FF]"
+            >
+              Employer career page
+              <ExternalLink size={14} />
+            </a>
+          )}
+
+          {thirdPartyUrl && (
+            <a
+              href={thirdPartyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl border border-[#514475] bg-[#241E35] px-4 py-2.5 text-xs font-semibold text-[#D0C2FF] transition hover:bg-[#302548]"
+            >
+              Third-party listing
+              <ExternalLink size={14} />
+            </a>
+          )}
+
+          {!employerUrl && !thirdPartyUrl && originalUrl && (
+            <a
+              href={originalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl bg-[#6C63FF] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#8179FF]"
+            >
+              View application
+              <ExternalLink size={14} />
+            </a>
+          )}
+
+          {!employerUrl && !thirdPartyUrl && !originalUrl && (
+            <span className="text-xs text-amber-400">
+              Application link unavailable
+            </span>
+          )}
+        </div>
+
+        {!employerUrl && thirdPartyUrl && (
+          <p className="mt-2 text-[11px] text-gray-500">
+            An official employer application link has not been found.
+          </p>
+        )}
+      </div>
+
+      {/* JOB METADATA */}
+
+      <div className="mt-4 flex flex-wrap justify-between gap-3 border-t border-[#292938] pt-4">
         <div className="space-y-1 text-[11px] text-gray-500">
           <p>
             Posted: {job.posted_date || "Not provided"}
           </p>
-          <p>Last verified: Not available from current search API</p>
-        </div>
 
-        {applicationUrl ? (
-          <a
-            href={applicationUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-xl bg-[#6C63FF] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#8179FF]"
-          >
-            View application
-            <ExternalLink size={14} />
-          </a>
-        ) : (
-          <span className="text-xs text-amber-400">
-            Application link unavailable
-          </span>
-        )}
+          <p className="flex items-center gap-1.5">
+            <Clock size={12} />
+            Last checked: {lastChecked}
+          </p>
+
+          <p className="flex items-center gap-1.5">
+            <CheckCircle2 size={12} />
+            Vacancy status: Not independently verified
+          </p>
+        </div>
       </div>
     </article>
   );
 }
 
+// --------------------------------------------------
+// FIND JOBS PAGE
+// --------------------------------------------------
+
 export default function FindJobs() {
-  const [preferences, setPreferences] = useState(EMPTY_PREFERENCES);
+  const [preferences, setPreferences] = useState(
+    EMPTY_PREFERENCES
+  );
+
   const [loadingPreferences, setLoadingPreferences] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -297,7 +416,9 @@ export default function FindJobs() {
 
   const [jobs, setJobs] = useState([]);
   const [searchInfo, setSearchInfo] = useState(null);
-  const [selectedSources, setSelectedSources] = useState(["All Sources"]);
+  const [selectedSources, setSelectedSources] = useState([
+    "All Sources",
+  ]);
   const [searchPerformed, setSearchPerformed] = useState(false);
 
   const availableSources = useMemo(
@@ -305,12 +426,17 @@ export default function FindJobs() {
     []
   );
 
+  // --------------------------------------------------
+  // LOAD PREFERENCES
+  // --------------------------------------------------
+
   async function fetchPreferences() {
     setLoadingPreferences(true);
     setError("");
 
     try {
       const response = await api.get("/jobs/preferences");
+
       setPreferences({
         ...EMPTY_PREFERENCES,
         ...response.data,
@@ -322,6 +448,7 @@ export default function FindJobs() {
           preferred_locations: [],
           preferred_job_titles: [],
         });
+
         setPreferencesOpen(true);
       } else {
         setError(
@@ -345,6 +472,10 @@ export default function FindJobs() {
     }));
   }
 
+  // --------------------------------------------------
+  // SAVE PREFERENCES
+  // --------------------------------------------------
+
   async function savePreferences(event) {
     event.preventDefault();
 
@@ -360,6 +491,7 @@ export default function FindJobs() {
           preferences.minimum_salary == null
             ? null
             : Number(preferences.minimum_salary),
+
         maximum_salary:
           preferences.maximum_salary === "" ||
           preferences.maximum_salary == null
@@ -367,7 +499,10 @@ export default function FindJobs() {
             : Number(preferences.maximum_salary),
       };
 
-      const response = await api.put("/jobs/preferences", payload);
+      const response = await api.put(
+        "/jobs/preferences",
+        payload
+      );
 
       setPreferences({
         ...EMPTY_PREFERENCES,
@@ -386,8 +521,14 @@ export default function FindJobs() {
     }
   }
 
+  // --------------------------------------------------
+  // DELETE PREFERENCES
+  // --------------------------------------------------
+
   async function resetPreferences() {
-    if (!window.confirm("Delete your saved job preferences?")) return;
+    if (!window.confirm("Delete your saved job preferences?")) {
+      return;
+    }
 
     setSaving(true);
     setMessage("");
@@ -395,6 +536,7 @@ export default function FindJobs() {
 
     try {
       await api.delete("/jobs/preferences");
+
       setPreferences(EMPTY_PREFERENCES);
       setSelectedSources(["All Sources"]);
       setMessage("Saved preferences deleted.");
@@ -408,6 +550,10 @@ export default function FindJobs() {
       setSaving(false);
     }
   }
+
+  // --------------------------------------------------
+  // SOURCE FILTERS
+  // --------------------------------------------------
 
   function toggleSource(source) {
     if (source === "All Sources") {
@@ -430,6 +576,10 @@ export default function FindJobs() {
     });
   }
 
+  // --------------------------------------------------
+  // MANUAL JOB SEARCH
+  // --------------------------------------------------
+
   async function searchJobs() {
     setSearching(true);
     setError("");
@@ -438,10 +588,9 @@ export default function FindJobs() {
     setSearchPerformed(true);
 
     try {
-      const sources =
-        selectedSources.includes("All Sources")
-          ? []
-          : selectedSources;
+      const sources = selectedSources.includes("All Sources")
+        ? []
+        : selectedSources;
 
       const response = await api.post("/jobs/search", sources);
 
@@ -452,6 +601,7 @@ export default function FindJobs() {
         location: response.data.location || "",
         queries: response.data.search_queries || [],
         groundedSources: response.data.grounded_sources || [],
+        searchMessage: response.data.search_message || "",
       });
     } catch (err) {
       setError(
@@ -467,17 +617,26 @@ export default function FindJobs() {
     ? SOURCES.length
     : selectedSources.length;
 
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
+
   return (
     <main className="ml-64 min-h-screen bg-[#0B0B12] px-5 py-8 text-white md:px-8">
       <div className="mx-auto max-w-6xl">
+
+        {/* PAGE HEADER */}
+
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-[#A78BFA]">
               Job Discovery
             </p>
+
             <h1 className="text-3xl font-bold tracking-tight">
               Find your next opportunity.
             </h1>
+
             <p className="mt-2 text-sm text-gray-400">
               Discover opportunities using your resume and job preferences.
             </p>
@@ -505,6 +664,8 @@ export default function FindJobs() {
           </div>
         )}
 
+        {/* PREFERENCES PANEL */}
+
         {preferencesOpen && (
           <section className="mb-8 rounded-2xl border border-[#393047] bg-[#151520] p-5 md:p-7">
             <div className="mb-6 flex items-center justify-between">
@@ -512,6 +673,7 @@ export default function FindJobs() {
                 <h2 className="text-lg font-semibold">
                   Job search preferences
                 </h2>
+
                 <p className="mt-1 text-xs text-gray-400">
                   Tell us what opportunities you are looking for.
                 </p>
@@ -534,7 +696,7 @@ export default function FindJobs() {
               <form onSubmit={savePreferences} className="space-y-7">
                 <TagInput
                   label="Preferred job titles"
-                  values={preferences.preferred_job_titles}
+                  values={preferences.preferred_job_titles || []}
                   onChange={(value) =>
                     updatePreference("preferred_job_titles", value)
                   }
@@ -543,7 +705,7 @@ export default function FindJobs() {
 
                 <TagInput
                   label="Preferred locations"
-                  values={preferences.preferred_locations}
+                  values={preferences.preferred_locations || []}
                   onChange={(value) =>
                     updatePreference("preferred_locations", value)
                   }
@@ -585,23 +747,28 @@ export default function FindJobs() {
 
                 <div>
                   <SectionTitle>Employment type</SectionTitle>
+
                   <div className="flex flex-wrap gap-2">
                     {JOB_TYPES.map((type) => {
                       const active =
-                        preferences.preferred_job_types.includes(type);
+                        (preferences.preferred_job_types || []).includes(type);
 
                       return (
                         <button
                           type="button"
                           key={type}
                           onClick={() => {
-                            const next = active
-                              ? preferences.preferred_job_types.filter(
-                                  (item) => item !== type
-                                )
-                              : [...preferences.preferred_job_types, type];
+                            const current =
+                              preferences.preferred_job_types || [];
 
-                            updatePreference("preferred_job_types", next);
+                            const next = active
+                              ? current.filter((item) => item !== type)
+                              : [...current, type];
+
+                            updatePreference(
+                              "preferred_job_types",
+                              next
+                            );
                           }}
                           className={`rounded-xl border px-3 py-2 text-xs transition ${
                             active
@@ -618,10 +785,11 @@ export default function FindJobs() {
 
                 <div>
                   <SectionTitle>Preferred salary range</SectionTitle>
+
                   <div className="grid gap-4 md:grid-cols-3">
                     <SelectField
                       label="Currency"
-                      value={preferences.currency}
+                      value={preferences.currency || "INR"}
                       onChange={(event) =>
                         updatePreference("currency", event.target.value)
                       }
@@ -656,6 +824,7 @@ export default function FindJobs() {
                       placeholder="40000"
                     />
                   </div>
+
                   <p className="mt-2 text-[11px] text-gray-500">
                     Salary values are annual unless the employer specifies otherwise.
                   </p>
@@ -664,7 +833,7 @@ export default function FindJobs() {
                 <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#30303E] bg-[#11111B] p-4">
                   <input
                     type="checkbox"
-                    checked={preferences.willing_to_relocate}
+                    checked={preferences.willing_to_relocate || false}
                     onChange={(event) =>
                       updatePreference(
                         "willing_to_relocate",
@@ -673,6 +842,7 @@ export default function FindJobs() {
                     }
                     className="h-4 w-4 accent-[#9B87F5]"
                   />
+
                   <span className="text-sm text-gray-300">
                     I am willing to relocate for the right opportunity.
                   </span>
@@ -702,6 +872,8 @@ export default function FindJobs() {
             )}
           </section>
         )}
+
+        {/* SOURCE FILTERS */}
 
         <section className="mb-7 rounded-2xl border border-[#292938] bg-[#151520] p-5 md:p-6">
           <div className="mb-5 flex items-center gap-2">
@@ -739,6 +911,7 @@ export default function FindJobs() {
               <p className="text-sm font-medium text-white">
                 Ready to discover jobs?
               </p>
+
               <p className="mt-1 text-xs text-gray-500">
                 Search uses your uploaded and analyzed resume.
               </p>
@@ -764,12 +937,15 @@ export default function FindJobs() {
           </div>
         </section>
 
+        {/* SEARCH RESULTS */}
+
         <section>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">
                 {searchPerformed ? "Search results" : "Job opportunities"}
               </h2>
+
               <p className="mt-1 text-xs text-gray-500">
                 {searchInfo
                   ? `${searchInfo.total} results · ${searchInfo.location}`
@@ -790,9 +966,11 @@ export default function FindJobs() {
                 size={28}
                 className="mx-auto animate-spin text-[#A78BFA]"
               />
+
               <p className="mt-4 font-medium text-white">
                 Discovering opportunities...
               </p>
+
               <p className="mt-2 text-xs text-gray-500">
                 Searching publicly accessible job sources.
               </p>
@@ -802,11 +980,14 @@ export default function FindJobs() {
           {!searching && searchPerformed && jobs.length === 0 && !error && (
             <div className="rounded-2xl border border-[#292938] bg-[#151520] p-10 text-center">
               <Search size={30} className="mx-auto text-gray-500" />
+
               <h3 className="mt-4 font-semibold text-white">
                 No matching jobs found
               </h3>
+
               <p className="mt-2 text-sm text-gray-500">
-                Try changing your selected sources or job preferences.
+                {searchInfo?.searchMessage ||
+                  "Try changing your selected sources or job preferences."}
               </p>
             </div>
           )}
@@ -844,11 +1025,12 @@ export default function FindJobs() {
               <p className="mb-2 text-xs font-semibold text-gray-300">
                 Search references
               </p>
+
               <div className="space-y-2">
                 {searchInfo.groundedSources.map((url) => (
                   <a
                     key={url}
-                    href={url}
+                    href={safeHttpsUrl(url) || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block break-all text-xs text-[#B9A7FF] hover:text-white"
